@@ -1,0 +1,23 @@
+DATA SEGMENT
+    
+DATA ENDS
+
+CODE SEGMENT
+    ASSUME CS:CODE,DS:DATA
+START:
+    MOV AX,DATA
+    MOV DS,AX
+    
+    MOV SI,100H
+    MOV AL,00H
+    MOV CX,0100H    ;0100H=256
+WRT:MOV [SI],AL
+    INC SI
+    INC AL
+    LOOP WRT    
+        
+     
+    MOV AH,4CH
+    INT 21H
+CODE ENDS
+    END START
