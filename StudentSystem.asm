@@ -49,18 +49,22 @@ DATA SEGMENT
     AVER    DB 5 DUP(0)
     i       DB 0
     j       DB 0
-    SCORE_ARRAY DW 10 DUP(0)
     INDEX_ARRAY DW 0,1,2,3,4,5,6,7,8,9
+    SCORE_ARRAY DW 10 DUP(0)
     ID_ARRAY    DW 10 DUP(0)
+    NAME_ARRAY  DW 10 DUP(0)
     SORT_FLAG DB 0        ;冒泡排序标志（ 1 for 升序，0 for 降序）
     SORTTYPE_FLAG   DB 0  ;1 for 学号，2 for 分数
+    IDtoSEARCH      DB 4 DUP(0)
+    NAMEtoSEARCH    DB 4 DUP(0)
     MENU    DB  0DH,0AH 
             DB '****************MENU*****************',0DH,0AH ;0DH,0AH=\r\n
             DB '*1.Input Student Info               *',0DH,0AH
             DB '*2.Sort by student ID or Score      *',0DH,0AH
             DB '*3.Show Average Score               *',0DH,0AH
             DB '*4.Show Score Distribution          *',0DH,0AH
-            DB '*5.EXIT                             *',0DH,0AH
+            DB '*5.Search Student Info              *',0DH,0AH
+            DB '*6.EXIT                             *',0DH,0AH
             DB '*Please enter FUNCTION No.          *',0DH,0AH
             DB '*************************************',0DH,0AH,'$'
     SORT_M  DB  0DH,0AH
@@ -70,6 +74,13 @@ DATA SEGMENT
             DB '|3.EXIT SORT               |',0DH,0AH
             DB '|Please enter FUNCTION No. |',0DH,0AH
             DB ' -------------------------- ',0DH,0AH,'$'
+    SEARCH_M    DB  0DH,0AH
+            DB ' --------SEARCH MENU-------- ',0DH,0AH ;0DH,0AH=\r\n
+            DB '|1.SEARCH with student ID   |',0DH,0AH
+            DB '|2.SEARCH with student Name |',0DH,0AH
+            DB '|3.EXIT SEARCH              |',0DH,0AH
+            DB '|Please enter FUNCTION No.  |',0DH,0AH
+            DB ' --------------------------- ',0DH,0AH,'$'
     STR1 DB 0DH,0AH,'Please enter the total number of students : ','$'
     STR2 DB 0DH,0AH,'Illegal input,must be integer below 256 : ','$'
     STR3 DB 0DH,0AH,'Please input student ','$'
@@ -85,6 +96,9 @@ DATA SEGMENT
     STR_78      DB 0DH,0AH,'70<=S<80     : ','$'
     STR_89      DB 0DH,0AH,'80<=S<90     : ','$'
     STR_90      DB 0DH,0AH,'90<=S<=100   : ','$'
+    STR_SEARCH_ID   DB 0DH,0AH,'Please enter the ID to search : ','$'
+    STR_SEARCH_NAME DB 0DH,0AH,'Please enter the Name to search : ','$'
+    STR_RSLT    DB 0DH,0AH,'Result : ',0DH,0AH,'$' 
 DATA ENDS
 
 CODE SEGMENT
@@ -103,7 +117,7 @@ menu_sel:
     
     CMP AL,'1'
     JB menu_sel
-    CMP AL,'5'
+    CMP AL,'6'
     JA menu_sel
         
     SUB AL,30H    
@@ -117,6 +131,8 @@ menu_sel:
     JZ P4
     CMP AL,5
     JZ P5
+    CMP AL,6
+    JZ P6
     
 P1: CALL INFO
     JMP menu_sel
@@ -126,7 +142,9 @@ P3: CALL AVERAGE
     JMP menu_sel
 P4: CALL DISTRIBUTION
     JMP menu_sel   
-P5: MOV AH,4CH
+P5: CALL SEARCH
+    JMP menu_sel 
+P6: MOV AH,4CH
     INT 21H
 ;*************************FUNCTION**************************
 ;
@@ -715,7 +733,240 @@ score_100:
     ADD SUM,1000
 not_100:        
     RET
-STR2NUM ENDP    
+STR2NUM ENDP 
+;******************************************************************************************************
+;	@FuncName:	    SEARCH
+;	@Description:	Search by student ID(1) or Name(2) 
+;******************************************************************************************************
+SEARCH PROC
+    searchmenu_sel:    
+    LEA DX,SEARCH_M
+    MOV AH,09H
+    INT 21H
     
+    MOV AH,01H  ;出口参数AL
+    INT 21H
+    CMP AL,'1'
+    JB searchmenu_sel
+    CMP AL,'3'
+    JA searchmenu_sel
+    SUB AL,30H
+        
+    CMP AL,1
+    JZ SH1
+    CMP AL,2
+    JZ SH2
+    CMP AL,3
+    JZ SH3
+    
+SH1: CALL SEARCH_ID
+    JMP searchmenu_sel
+SH2: CALL SEARCH_NAME
+    JMP searchmenu_sel  
+SH3: RET    
+SEARCH ENDP    
+;-----------------------------
+;按学号查询学生信息 
+SEARCH_ID PROC
+    MOV SUM,0
+    LEA DX,STR_SEARCH_ID
+    MOV AH,09H
+    INT 21H
+    
+    LEA SI,IDtoSEARCH
+    PUSH SI
+    CALL NEXTCHAR
+    nextline
+    POP SI  
+    
+    MOV AL,[SI]     ;取学号字符串的第1个字符
+    SUB AL,30H
+    MOV DL,100      ;作为百位
+    MUL DL
+    ADD SUM,AX
+    MOV AL,[SI+1]   ;取学号字符串的第2个字符
+    SUB AL,30H
+    MOV DL,10       ;作为十位
+    MUL DL
+    ADD SUM,AX      
+    MOV AL,[SI+2]   ;取学号字符串的第3个字符，作为个位
+    SUB AL,30H
+    XOR AH,AH
+    ADD SUM,AX
+    PUSH SUM        ;压栈SUM
+    
+    XOR CX,CX
+    MOV CL,TOTAL
+    XOR BX,BX
+    LEA SI,ID_ARRAY    
+id_array_append_1:
+    PUSH SI
+    MOV SUM,0
+    CALL ID2NUM
+    POP SI
+    MOV DX,SUM
+    MOV [SI],DX
+    INC SI
+    INC SI
+    LOOP id_array_append_1
+    
+    XOR CX,CX
+    MOV CL,TOTAL    
+    POP SUM         ;弹栈SUM
+    XOR AX,AX
+    LEA SI,ID_ARRAY
+compare_id:                    
+    MOV DX,[SI]
+    CMP SUM,DX
+    JZ findout
+    INC SI
+    INC SI
+    INC AL
+    LOOP compare_id
+    
+findout:
+    MOV BH,InfoLen  ;被乘数在AL中
+    MUL BH          ;[SI]*20,每个学生的信息占20Byte
+    MOV BX,AX
+    XOR AX,AX
+    LEA DX,STR_RSLT
+    MOV AH,09H
+    INT 21H
+    LEA DX,StuInfo[BX]  ;取第i个同学的信息
+    MOV AH,09H
+    INT 21H
+    
+    RET
+SEARCH_ID ENDP 
+;-----------------------------
+;按姓名查询学生信息
+SEARCH_NAME PROC
+    MOV SUM,0
+    ;重置NAMEtoSEARCH
+    LEA SI,NAMEtoSEARCH
+    MOV CX,4
+clear_NAMEtoSEARCH:
+    MOV [SI],0000H
+    ADD SI,2
+    LOOP clear_NAMEtoSEARCH
+    
+    LEA DX,STR_SEARCH_NAME
+    MOV AH,09H
+    INT 21H
+    
+    LEA SI,NAMEtoSEARCH
+    PUSH SI
+    CALL NEXTCHAR
+    nextline
+    POP SI  
+    
+    MOV AL,[SI]     ;取姓名字符串的第1个字符
+    SUB AL,30H
+    MOV DL,100      ;作为百位
+    MUL DL
+    ADD SUM,AX
+    MOV AL,[SI+1]   ;取姓名字符串的第2个字符
+    SUB AL,30H
+    MOV DL,10       ;作为十位
+    MUL DL
+    ADD SUM,AX      
+    MOV AL,[SI+2]   ;取姓名字符串的第3个字符，作为个位
+    
+    CMP AL,0
+    JZ name_with2word_1
+    JMP name_with3word_1
+name_with2word_1:
+    JMP next3
+name_with3word_1:   
+    SUB AL,30H
+next3:    
+    XOR AH,AH
+    ADD SUM,AX
+    PUSH SUM        ;压栈SUM
+    
+    XOR CX,CX
+    MOV CL,TOTAL
+    XOR BX,BX
+    LEA SI,NAME_ARRAY    
+name_array_append_1:
+    PUSH SI
+    MOV SUM,0
+    CALL NAME2NUM
+    POP SI
+    MOV DX,SUM
+    MOV [SI],DX
+    INC SI
+    INC SI
+    LOOP name_array_append_1
+    
+    XOR CX,CX
+    MOV CL,TOTAL    
+    POP SUM         ;弹栈SUM
+    XOR AX,AX
+    LEA SI,NAME_ARRAY
+compare_name:                    
+    MOV DX,[SI]
+    CMP SUM,DX
+    JZ findout
+    INC SI
+    INC SI
+    INC AL
+    LOOP compare_name
+    
+findout_1:
+    MOV BH,InfoLen  ;被乘数在AL中
+    MUL BH          ;[SI]*20,每个学生的信息占20Byte
+    MOV BX,AX
+    XOR AX,AX
+    LEA DX,STR_RSLT
+    MOV AH,09H
+    INT 21H
+    LEA DX,StuInfo[BX]  ;取第i个同学的信息
+    MOV AH,09H
+    INT 21H
+    
+    RET
+SEARCH_NAME ENDP
+;姓名转换为整数
+NAME2NUM PROC
+    PUSH BX     ;压BX
+    XOR AX,AX
+    MOV AL,BL   ;被乘数放到AL
+    MOV BH,InfoLen
+    MUL BH      ;BL*20,每个学生的信息占20Byte
+    MOV BX,AX
+    XOR AX,AX
+    
+    MOV DI,stu_name
+    LEA SI,StuInfo[BX][DI]  ;取第i个同学的姓名
+    POP BX      ;弹BX
+    INC BX
+    
+    MOV AL,[SI]     ;取姓名字符串的第1个字符
+    SUB AL,30H
+    MOV DL,100      ;作为百位
+    MUL DL
+    ADD SUM,AX
+    MOV AL,[SI+1]   ;取姓名字符串的第2个字符
+    SUB AL,30H
+    MOV DL,10       ;作为十位
+    MUL DL
+    ADD SUM,AX      
+    MOV AL,[SI+2]   ;取姓名字符串的第3个字符
+    CMP AL,' '
+    JZ name_with2word
+    JMP name_with3word
+name_with2word:
+    SUB AL,20H      ;如果名字为2个字，存放第三个字的地方的空格变为0
+    JMP next2
+name_with3word:        
+    SUB AL,30H
+next2:
+    XOR AH,AH
+    ADD SUM,AX
+        
+    RET
+NAME2NUM ENDP 
+
 CODE ENDS
     END START
